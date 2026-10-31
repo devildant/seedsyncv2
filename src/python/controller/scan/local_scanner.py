@@ -2,6 +2,7 @@
 
 import logging
 import os
+import subprocess
 from typing import override
 
 from common import Constants, Localization
@@ -34,6 +35,9 @@ class LocalScanner(IScanner):
             self.logger.warning(f"Scan path does not exist: {self.__local_path}")
             return []
         try:
+            mask = int(os.environ.get("UMASK", "022"), 8)
+            mode = 0o777 & ~mask
+            subprocess.run(["chmod", "-R", "-f", f"{mode:03o}", self.__local_path], check=False)
             result = self.__scanner.scan()
         except SystemScannerError:
             self.logger.exception("Caught SystemScannerError")
