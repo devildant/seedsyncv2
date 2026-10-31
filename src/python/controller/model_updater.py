@@ -207,6 +207,35 @@ class ModelUpdater:
 
         assert diff.new_file is not None
         assert pc is not None
+        
+        # Normalize permissions once when SeedSync reports a completed download.
+        # Only modify the downloaded item inside this pair's local directory.
+        try:
+            mask = int(os.environ.get("UMASK", "022"), 8)
+            if not 0 <= mask <= 0o777:
+                raise ValueError("UMASK must be between 000 and 777")
+            file_mode = 0o666 & ~mask
+            dir_mode = 0o777 & ~mask
+        except ValueError as exc:
+            self._logger.warning("Invalid UMASK; skipping download permission update: %s", exc)
+        else:
+            root = os.path.realpath(pc.effective_local_path)
+            target = os.path.abspath(os.path.join(root, diff.new_file.name))
+            if os.path.commonpath((root, target)) == root and not os.path.islink(target):
+                try:
+                    if os.path.isdir(target):
+                        for directory, subdirs, files in os.walk(target, followlinks=False):
+                            os.chmod(directory, dir_mode)
+                            for filename in files:
+                                path = os.path.join(directory, filename)
+                                if not os.path.islink(path):
+                                    os.chmod(path, file_mode)
+                        # os.walk doesn't visit symlink directories, but directory list is harmless.
+                    elif os.path.isfile(target):
+                        os.chmod(target, file_mode)
+                except OSError as exc:
+                    self._logger.warning("Could not apply download permissions to %s: %s", target, exc)
+
         pkey = persist_key(diff.new_file.pair_id, diff.new_file.name)
         self._persist.downloaded_file_names.add(pkey)
         self.sync_persist_to_all_builders()
