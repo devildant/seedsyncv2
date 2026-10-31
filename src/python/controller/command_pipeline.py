@@ -559,7 +559,7 @@ class CommandPipeline:
             except LftpError as e:
                 error_str = str(e)
                 permanent_patterns = ["Login failed", "Access failed"]
-                if any(p in error_str for p in permanent_patterns):
+                if "No such file" not in error_str and any(p in error_str for p in permanent_patterns):
                     raise AppError(error_str) from e
                 self._logger.warning(f"Caught lftp error: {error_str}")
             pc.active_scan_process.propagate_exception()
